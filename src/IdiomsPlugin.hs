@@ -49,7 +49,7 @@ transform dflags = SYB.everywhereM (SYB.mkM transform') where
                 debug $ "RES : " ++ GHC.showPpr dflags result
                 return (L l (HsPar x result))
             _ -> do
-                liftIO $ GHC.putLogMsg dflags GHC.NoReason Err.SevWarning l (GHC.defaultDumpStyle dflags) $
+                liftIO $ GHC.putLogMsg dflags GHC.NoReason Err.SevWarning l (GHC.defaultErrStyle dflags) $
                     GHC.text "Non singleton idiom bracket list"
                     GHC.$$
                     GHC.ppr exprs

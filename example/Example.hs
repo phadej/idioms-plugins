@@ -13,3 +13,7 @@ main = do
     print ([ const (Just "foo") Nothing ])
     -- Just 3
     print ([ (+) (Just 1) (Just (2 :: Int)) ])
+
+    -- [1,2,3], because `pure 1` is [1]
+    -- and non singleton lists are not transformed
+    print $ ([ 1 ]) ++ ([2, 3])

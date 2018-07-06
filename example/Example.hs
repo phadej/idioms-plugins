@@ -14,8 +14,8 @@ main = do
     -- Just 3
     print ([ (+) (Just 1) (Just (2 :: Int)) ])
 
-    -- Just True
-    print ([ Just True || Just False ])
+    -- [True,True,True,False,True,False,True,False]
+    print ([ [True,False] && [True,False] || [True,False] ])
 
     -- [1,2,3], because `pure 1` can be specialised to [1]
     -- and non singleton lists are not transformed

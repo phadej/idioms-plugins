@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFunctor #-}
 module IdiomsPlugin (plugin) where
 
 import Control.Monad.IO.Class (MonadIO (..))
@@ -38,8 +39,11 @@ transform dflags = SYB.everywhereM (SYB.mkM transform') where
     transform' :: LHsExpr GhcPs -> GHC.Hsc (LHsExpr GhcPs)
     transform' e@(L l (HsPar x (L l' (ExplicitList  _ Nothing exprs)))) | inside l l' =
         case exprs of
-            [L _ (OpApp _ lhs op rhs)] ->
-                return (pureExpr op `apExpr` lhs `apExpr` rhs)
+            [expr@(L _e OpApp {})] -> do
+                let bt = matchOp expr
+                let result = idiomBT bt
+                debug $ "RES : " ++ GHC.showPpr dflags result
+                return result
             [expr] -> do
                 let (f :| args) = matchApp expr
                 let f' = pureExpr f
@@ -76,6 +80,16 @@ pureRdrName = GHC.mkRdrUnqual (GHC.mkVarOcc "pure")
 -- Ap
 -------------------------------------------------------------------------------
 
+-- f x ~> f <$> x
+fmapExpr :: LHsExpr GhcPs -> LHsExpr GhcPs -> LHsExpr GhcPs
+fmapExpr f x =
+    L l' $ OpApp NoExt f (L l' (HsVar NoExt (L l' fmapRdrName))) x
+  where
+    l' = GHC.noSrcSpan
+
+fmapRdrName :: GHC.RdrName
+fmapRdrName = GHC.mkRdrUnqual (GHC.mkVarOcc "<$>")
+
 -- f x ~> f <*> x
 apExpr :: LHsExpr GhcPs -> LHsExpr GhcPs -> LHsExpr GhcPs
 apExpr f x =
@@ -87,10 +101,10 @@ apRdrName :: GHC.RdrName
 apRdrName = GHC.mkRdrUnqual (GHC.mkVarOcc "<*>")
 
 -------------------------------------------------------------------------------
--- Matching helper
+-- Function application maching
 -------------------------------------------------------------------------------
 
--- | Match nested applications:
+-- | Match nested function applications, 'HsApp':
 -- f x y z ~> f :| [x,y,z]
 --
 matchApp :: LHsExpr p -> NonEmpty (LHsExpr p)
@@ -99,6 +113,25 @@ matchApp e = pure e
 
 neSnoc :: NonEmpty a -> a -> NonEmpty a
 neSnoc (x :| xs) y = x :| xs ++ [y]
+
+-------------------------------------------------------------------------------
+-- Operator application matching
+-------------------------------------------------------------------------------
+
+-- | Match nested operator applications, 'OpApp'.
+-- x + y * z ~>  Branch (+) (Leaf x) (Branch (*) (Leaf y) (Leaf z))
+matchOp :: LHsExpr p -> BT (LHsExpr p)
+matchOp (L _ (OpApp _  lhs op rhs)) = Branch (matchOp lhs) op (matchOp rhs)
+matchOp x = Leaf x
+
+-- | Non-empty binary tree, with elements at branches too.
+data BT a = Leaf a | Branch (BT a) a (BT a)
+  deriving Functor
+
+-- flatten: note that leaf is returned as is.
+idiomBT :: BT (LHsExpr GhcPs) -> LHsExpr GhcPs
+idiomBT (Leaf x)            = x
+idiomBT (Branch lhs op rhs) = fmapExpr op (idiomBT lhs) `apExpr` idiomBT rhs
 
 -------------------------------------------------------------------------------
 -- Location checker

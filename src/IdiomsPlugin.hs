@@ -38,6 +38,8 @@ transform dflags = SYB.everywhereM (SYB.mkM transform') where
     transform' :: LHsExpr GhcPs -> GHC.Hsc (LHsExpr GhcPs)
     transform' e@(L l (HsPar x (L l' (ExplicitList  _ Nothing exprs)))) | inside l l' =
         case exprs of
+            [L _ (OpApp _ lhs op rhs)] ->
+                return (pureExpr op `apExpr` lhs `apExpr` rhs)
             [expr] -> do
                 let (f :| args) = matchApp expr
                 let f' = pureExpr f
